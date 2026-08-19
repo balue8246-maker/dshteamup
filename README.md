@@ -155,6 +155,39 @@ mux 通道送达，pending 表私有，agent 无渠道获取 rpcId；故裁决�
 审计事件持久；worker turn 结束/中断会自动 cancel 未决审批）；裁决面信任同源围栏
 （协议层）。
 
+## 主脑状态板（期望状态 vs 实际状态 + 偏差检测）
+
+面板「状态」tab（原「线程」tab 改版）：每行 = 线程 + **期望状态**（badge +
+下拉手动覆盖）+ **实际状态**（idle/running + 最后活动 staleness）+ **偏差高亮**。
+让"009 应该在干活但实际没在动"这类异常一眼可见。
+
+**期望状态语义**（`expected ∈ working | idle | paused | awaiting-return | done`）：
+
+| 状态 | 含义 |
+|------|------|
+| `working` | 应在干活（派工后自动设置） |
+| `idle` | 应空闲 |
+| `paused` | 应暂停（暂停指令后自动设置） |
+| `awaiting-return` | 应在等待回报 |
+| `done` | 应已完成（验收 confirm 后自动设置） |
+
+**自动流转（自动为主，手动覆盖为辅）**：
+- `teamup_send_message` 派工（消息含「任务编号：」）→ 目标线程期望 `working`（带任务编号）；
+  暂停/恢复指令（含「暂停/pause」「恢复/resume」）→ `paused` / `working`
+- 账本验收 `confirm-return`（面板一键确认或 CLI）→ 匹配 `taskId` 的线程期望 `done`
+- 手动：`teamup_set_expectation {threadId, expected, taskId?, note?}` 或面板下拉（
+  `POST /teamup/api/expectations/set`，面板=主脑）
+
+**偏差规则**（期望是声明非事实，只告警不自动纠正）：
+- 🔴 期望 `working` 但实际 `idle` 且最后活动距今 > 3 分钟 → **疑似中断**
+- 🟡 期望 `idle`/`paused`/`done` 但实际 `running` → **未派工活动** / **暂停中却在活动** / **已验收仍在活动**
+
+**存储/HTTP**：期望状态落盘 `~/.dsh/profiles/web/dshteamup/expectations.json`
+（threadId → {expected, taskId?, note?, updatedAt, setBy}）；
+`GET /teamup/api/expectations`（状态板 rows，含偏差与 staleness）、
+`POST /teamup/api/expectations/set`（`{threadId, expected, taskId?, note?}`，
+非法 expected 400）——沿用同一信任围栏。
+
 ## 工具清单
 
 | 工具 | 作用 |
@@ -171,6 +204,8 @@ mux 通道送达，pending 表私有，agent 无渠道获取 rpcId；故裁决�
 | `teamup_ask_approval` | 关键操作发起审批（等待主脑裁决） |
 | `teamup_decide_approval` | 主脑裁决审批（批准/拒绝，结果回传 worker） |
 | `teamup_list_approvals` | 查待裁决/已裁决审批 |
+| `teamup_set_expectation` | 主脑手动设置线程期望状态（状态板覆盖） |
+| `teamup_list_expectations` | 查状态板（期望/实际/偏差/staleness） |
 
 ## 架构
 
