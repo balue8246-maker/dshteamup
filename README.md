@@ -48,25 +48,39 @@ dsh plugin --profile <profile> add "file:<本目录>"
 > profile（如纯 headless/CLI profile）时，插件无法激活，6 个 `teamup_*` 工具会
 > **静默失效**——请只在 `dsh web` 承载的 profile 中使用本插件。
 
-侧栏底部的「团队」按钮（展开态显示 `TeamUp`）打开浮层面板，实时展示 live 线程
-清单：标题、状态（空闲/运行中）、团队名（按 `teamName` 分组，未分组垫底）、
-事件数、短 sessionId。支持手动刷新，面板打开期间每 15s 自动刷新（in-flight
-去重，无重叠请求）。
+侧栏底部的「团队」按钮（展开态显示 `TeamUp`）打开浮层面板，含两个标签页
+（均支持手动刷新，面板打开期间每 15s 自动刷新，in-flight 去重无重叠请求）：
 
-**数据通道（只读）**——`/teamup/api` 前缀路由，仅 GET，与
-`teamup_list_threads` 工具共用 `collectThreads()`，数据严格一致：
+- **线程**：live 线程清单——标题、状态（空闲/运行中）、团队名（按 `teamName`
+  分组，未分组垫底）、事件数、短 sessionId；数据与 `teamup_list_threads` 工具
+  同源（host 共用 `collectThreads()`）。
+- **账本**：任务概览——任务编号、状态（待派发/已派发/已回报/已确认/阻塞/过期）、
+  阶段（kind）、依赖、派发角色 + 聚合 stats（派发/确认/过期计数）；数据与
+  `teamup_runtime stats` 同源。任务行提供**一键记账**：已派发任务「记回报」
+  （submit-return）、已回报任务「确认」（confirm-return，主脑验收后点击）。
 
-| 路径 | 返回 |
+**数据通道**——`/teamup/api` 前缀路由（信任围栏包住全部方法，见下）：
+
+| 方法/路径 | 作用 |
 |------|------|
-| `/teamup/api`、`/teamup/api/threads` | live 线程清单（含 registry 合并的 title/teamName） |
-| `/teamup/api/registry` | `registry.json` 原文 |
+| `GET /teamup/api`、`/teamup/api/threads` | live 线程清单（含 registry 合并的 title/teamName） |
+| `GET /teamup/api/registry` | `registry.json` 原文 |
+| `GET /teamup/api/ledger` | 账本概览（团队元信息 + `stats` + 逐任务状态），未初始化则自动 init |
+| `POST /teamup/api/ledger/submit` | 一键记账：`submit-return {taskId}` |
+| `POST /teamup/api/ledger/confirm` | 一键记账：`confirm-return {taskId, submissionId?}`（主脑确认权柄） |
+
+写面最小化：仅 submit/confirm 两个 POST，其余只读。账本 store 固定为
+`~/.dsh/profiles/web/dshteamup/ledger/<team_id>/`（team id 固定 `dshteamup`，
+所有 CLI 调用显式传 `--store`，不依赖进程 cwd）；确认密钥优先级为环境变量
+`TEAMUP_CONFIRMATION_SECRET` > `<store>/confirmation.secret`（自动 init 时若
+两者皆无会生成随机密钥落盘，本地 MVP 兜底）。
 
 响应头带 `cache-control: no-store`（client fetch 亦带 `no-store`，双保险）。
 
 **信任围栏**（与 dsh `/api` 网关同一信任模型）：请求的 `Host` 必须是回环地址
 （`localhost` / `127.*` / `[::1]`）或部署配置的 `trustedHosts` 权威来源；
 `sec-fetch-site: cross-site` 直接拒绝；携带 `Origin` 时要求与 `Host` 同源。
-不满足任一条件 → `403`。端点为只读 GET，无 CSRF 面。
+不满足任一条件 → `403`（含记账 POST）。
 
 **生效方式**：host 路由（`/teamup/api`）与 client bundle（`lib/client.js`）都
 在 dsh 启动时装配——修改后需**重启 dsh，再刷新页面**才生效（未运行 dev HMR
