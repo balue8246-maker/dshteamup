@@ -1,0 +1,11 @@
+{
+  "afc47add-5af9-4d4f-82b3-3609d9db05c4": {
+    "title": "复活测试",
+    "cwd": "/Users/acegent/Documents/DS Projects",
+    "parentSession": null,
+    "preset": null,
+    "provider": "deepseek-official",
+    "model": "deepseek-v4-flash",
+    "createdAt": "2026-08-19T04:23:20.480Z"
+  }
+}
