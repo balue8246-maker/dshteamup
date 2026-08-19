@@ -4,9 +4,9 @@ TeamUp 团队编排的 **dsh 适配层**。TeamUp 是从 Codex 移植的多线�
 
 ## 这是什么
 
-- `teamup_runtime.py`（事件账本 CLI，已原样移植）继续负责 TeamUp 的协议与证据链：init / add-task / dispatch / record-message / submit-return / confirm-return 等。
+- `lib/teamup_runtime.py`（事件账本 CLI，已原样移植）继续负责 TeamUp 的协议与证据链：init / add-task / dispatch / record-message / submit-return / confirm-return 等。
 - 本插件提供 **dsh 线程 ⇄ 账本** 的传输层：把 "创建线程、派工、读回执、审计、归档" 落到 dsh 的 AgentRegistry / Session 事件日志上。
-- `SKILL.md` 与 `teamup_runtime.py` 不被本插件修改。
+- 原版 `SKILL.md`（Codex 治理文本，1427 行）已存档至 `docs/TeamUp-SKILL-original.md`，不参与打包；插件仅沿用其角色模型与证据链思路。
 
 ## 安装
 
