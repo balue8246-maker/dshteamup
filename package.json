@@ -1,0 +1,26 @@
+{
+  "name": "dshteamup",
+  "version": "0.1.0",
+  "description": "dshteamup：TeamUp 团队编排的 dsh 适配层。把 Codex 的 thread tools 七件套映射到 dsh 官方 API（ctx.agents），让 dsh 里的主脑通过工具调用创建/调度/审计多线程 worker。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "teamup_runtime.py",
+    "README.md"
+  ],
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
