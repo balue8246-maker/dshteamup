@@ -41,6 +41,43 @@ dsh plugin --profile <profile> add "file:<本目录>"
 
 重启 dsh 后主脑即可看到 6 个 `teamup_*` 工具。
 
+## Web 协作面板（仅限 web profile）
+
+> **兼容性前提**：本插件的 Web 面板**仅限 dsh 的 web profile**。host 侧 `inject`
+> 硬依赖 `webServer`/`webRuntime` 服务（`lib/index.js`），装入没有 web 服务的
+> profile（如纯 headless/CLI profile）时，插件无法激活，6 个 `teamup_*` 工具会
+> **静默失效**——请只在 `dsh web` 承载的 profile 中使用本插件。
+
+侧栏底部的「团队」按钮（展开态显示 `TeamUp`）打开浮层面板，实时展示 live 线程
+清单：标题、状态（空闲/运行中）、团队名（按 `teamName` 分组，未分组垫底）、
+事件数、短 sessionId。支持手动刷新，面板打开期间每 15s 自动刷新（in-flight
+去重，无重叠请求）。
+
+**数据通道（只读）**——`/teamup/api` 前缀路由，仅 GET，与
+`teamup_list_threads` 工具共用 `collectThreads()`，数据严格一致：
+
+| 路径 | 返回 |
+|------|------|
+| `/teamup/api`、`/teamup/api/threads` | live 线程清单（含 registry 合并的 title/teamName） |
+| `/teamup/api/registry` | `registry.json` 原文 |
+
+响应头带 `cache-control: no-store`（client fetch 亦带 `no-store`，双保险）。
+
+**信任围栏**（与 dsh `/api` 网关同一信任模型）：请求的 `Host` 必须是回环地址
+（`localhost` / `127.*` / `[::1]`）或部署配置的 `trustedHosts` 权威来源；
+`sec-fetch-site: cross-site` 直接拒绝；携带 `Origin` 时要求与 `Host` 同源。
+不满足任一条件 → `403`。端点为只读 GET，无 CSRF 面。
+
+**生效方式**：host 路由（`/teamup/api`）与 client bundle（`lib/client.js`）都
+在 dsh 启动时装配——修改后需**重启 dsh，再刷新页面**才生效（未运行 dev HMR
+时不做热替换）。
+
+**client bundle 说明**：遵循 dsh 的 client 纯度门——`package.json` 的
+`dsh.client.inject` 声明的是模块表依赖边（`@deepseek-ai/dsh-client-runtime`、
+`@deepseek-ai/dsh-client-ui-slots`），bundle 内部实际只 `require` 平台种子词
+`react` / `react-dom`，零跨插件 value import、零第三方依赖（与
+dsh-better-sidebar 风格一致）。
+
 ## 工具清单
 
 | 工具 | 作用 |
@@ -56,7 +93,8 @@ dsh plugin --profile <profile> add "file:<本目录>"
 
 ```
 lib/
-├── index.js            # dsh 适配层（6 工具 + registry + rehydrate + attach + 纪律注入）
+├── index.js            # dsh 适配层（6 工具 + registry + rehydrate + attach + 纪律注入 + /teamup/api 只读路由）
+├── client.js           # Web 协作面板 client bundle（sidebar.footer.action 挂载，仅 require react/react-dom）
 └── teamup_runtime.py   # 事件账本 CLI（stdlib-only，1742 行）
 docs/TeamUp-SKILL-original.md  # 原版治理文本存档（不打包）
 ```
@@ -70,3 +108,4 @@ docs/TeamUp-SKILL-original.md  # 原版治理文本存档（不打包）
 - 归档即销毁：`dispose()` 移除 session，归档后历史无法再经插件读取（账本记录仍在 team store）
 - 只能归档本插件创建的线程（dsh 的 dispose 是创建者能力）
 - `teamup_send_message` 回执以 session 事件日志为准；任务是否完成需主脑 `teamup_read_thread` 审计
+- **仅限 web profile**：Web 面板（含 6 工具本身）依赖 `webServer`/`webRuntime` 服务，装入无 web 服务的 profile 会静默失效（见上节）
