@@ -92,6 +92,36 @@ dsh plugin --profile <profile> add "file:<本目录>"
 `react` / `react-dom`，零跨插件 value import、零第三方依赖（与
 dsh-better-sidebar 风格一致）。
 
+## 文件锁（协议层写安全）
+
+多 worker 并行干活时防止两个 worker 同时改同一文件。**注意：这是协议层强制，
+不是硬拦截**——dsh 无法阻止 worker 直接调 `bash`/`write` 绕过锁，靠三层兜底：
+① worker seed 注入【写前查锁】纪律（第 8 条）；② 面板「锁」标签页可见性；
+③ 冲突检测（claim 冲突 409 / 非持有者释放 403，主脑可强制释放）。
+
+**工具（worker/主脑可用）**：
+
+| 工具 | 作用 |
+|------|------|
+| `teamup_list_locks` | 写/改文件前必查：当前全部锁（路径/持有者/时间/原因） |
+| `teamup_claim_file` | 占锁 `{path, reason?}`：被他人持有返回 409 + 持有者信息，绝不硬写 |
+| `teamup_release_file` | 释放 `{path}`：仅持有者可释放（403），主脑可强制释放 |
+
+锁状态落盘 `~/.dsh/profiles/web/dshteamup/locks.json`（path 归一化为绝对路径；
+相对路径按主进程 cwd 解析；长度 ≤4096 且禁控制字符）。主脑强制释放判定：
+工具调用方 == 主脑线程（`config.ledgerMainBrainThreadId` 或启发式），或面板
+操作（面板=主脑操作台）。
+
+**面板**：第三个标签页「锁」展示当前锁列表（文件/持有者/时间/原因），可点
+「释放」（主脑权限，强制释放）。
+
+**HTTP**：`GET /teamup/api/locks`（列表）、`POST /teamup/api/locks/claim`
+（`{path, reason?}`，冲突 409）、`POST /teamup/api/locks/release`
+（`{path}`，面板=主脑可强制释放）——写面沿用同一信任围栏 + path 白名单校验。
+
+**遗留**：git worktree 隔离（每个 worker 独立工作树）未实现——需主脑确认工作区
+git 状态后另行评估。
+
 ## 工具清单
 
 | 工具 | 作用 |
@@ -102,6 +132,9 @@ dsh-better-sidebar 风格一致）。
 | `teamup_read_thread` | 读线程事件日志（带 seq，供验收/审计） |
 | `teamup_runtime` | 透传 `teamup_runtime.py` 账本 CLI（协议与证据链） |
 | `teamup_archive_thread` | 归档线程（dispose + 注册表清理） |
+| `teamup_claim_file` | 占文件锁（写前必拿，冲突 409 回报主脑） |
+| `teamup_release_file` | 释放文件锁（仅持有者/主脑） |
+| `teamup_list_locks` | 查全部文件锁（写前必查） |
 
 ## 架构
 
