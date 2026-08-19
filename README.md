@@ -122,6 +122,39 @@ dsh-better-sidebar 风格一致）。
 **遗留**：git worktree 隔离（每个 worker 独立工作树）未实现——需主脑确认工作区
 git 状态后另行评估。
 
+## 审批门（协议增强）
+
+worker 执行关键/危险操作前先发起审批，主脑在面板「审批中心」批准/拒绝，结果
+回传 worker（allowed-once 继续 / rejected 停止），全程落审计。
+
+**混合路径（复用原生 `ctx.approval`，不另造轮子）**：
+- worker 侧 `teamup_ask_approval {action, reason}` → 调原生 `ctx.approval.request()`，
+  原生审计 `approval/asked` + `approval/decided` 落 worker session（可查）；
+- 插件注册 **prepend** 的 `approval/request` answerer（先于 dsh 的浏览器 answerer，
+  见 dsh-user-approval + cordis waterfall 语义）：只拦截本插件创建的 worker 的审批，
+  登记 pending 后等主脑裁决；非 worker 审批调用 `next()` 透传，浏览器审批流不变；
+- 主脑裁决：面板「审批中心」批准/拒绝（`POST /teamup/api/approval/decide`），或
+  主脑 agent 用 `teamup_decide_approval {approvalId, approved}` 工具——同一路径；
+- 面板：第四个标签页「审批」——待裁决列表（谁/什么操作/原因/时间 + 批准/拒绝
+  按钮）+ 最近已裁决列表。
+
+**U1 结论（已冒烟/代码级确认）**：主脑**无法**经 `/api/respond` 程序化应答 worker
+审批——respond 的 rpcId 由 host-apiproxy 服务端铸造（`randomUUID`）且只经浏览器
+mux 通道送达，pending 表私有，agent 无渠道获取 rpcId；故裁决面为面板 + 工具
+（本插件转发），不走 respond。
+
+**工具**：`teamup_ask_approval`（worker 发起）、`teamup_decide_approval`（主脑
+裁决）、`teamup_list_approvals`（待裁决/已裁决列表）。纪律：WORKER_RULES 第 9 条
+【关键操作审批】已注入 worker seed。
+
+**HTTP**：`GET /teamup/api/approvals`（待裁决+已裁决）、
+`POST /teamup/api/approval/decide`（`{approvalId, outcome: allowed-once|rejected}`，
+未知 404 / 缺 id 400）——沿用同一信任围栏。
+
+**限制**：pending/decided 为内存态（dsh 重启后 pending 丢失，但 worker session 的
+审计事件持久；worker turn 结束/中断会自动 cancel 未决审批）；裁决面信任同源围栏
+（协议层）。
+
 ## 工具清单
 
 | 工具 | 作用 |
@@ -135,6 +168,9 @@ git 状态后另行评估。
 | `teamup_claim_file` | 占文件锁（写前必拿，冲突 409 回报主脑） |
 | `teamup_release_file` | 释放文件锁（仅持有者/主脑） |
 | `teamup_list_locks` | 查全部文件锁（写前必查） |
+| `teamup_ask_approval` | 关键操作发起审批（等待主脑裁决） |
+| `teamup_decide_approval` | 主脑裁决审批（批准/拒绝，结果回传 worker） |
+| `teamup_list_approvals` | 查待裁决/已裁决审批 |
 
 ## 架构
 
